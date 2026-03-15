@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Maze Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Segoe UI', sans-serif; color: #eee; padding: 10px; }
+    h1 { margin-bottom: 4px; font-size: 2rem; color: #e94560; letter-spacing: 2px; }
+    #levelName { margin-bottom: 8px; font-size: 1rem; color: #aaa; letter-spacing: 1px; }
+    #info { display: flex; gap: 14px; margin-bottom: 8px; font-size: 0.9rem; flex-wrap: wrap; justify-content: center; }
+    #info span { background: #16213e; padding: 4px 13px; border-radius: 20px; }
+    #difficulty { margin-bottom: 8px; font-size: 0.82rem; color: #aaa; text-align: center; }
+    canvas { border: 3px solid #e94560; border-radius: 6px; box-shadow: 0 0 30px #e9456055; transition: border-color .5s, box-shadow .5s; }
+    #controls { margin-top: 8px; font-size: 0.78rem; color: #555; }
+    #keyStatus { margin-bottom: 6px; font-size: 0.88rem; display: none; }
+    #overlay { position: fixed; inset: 0; background: rgba(10,10,20,.88); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+    #overlay h2 { font-size: 2.8rem; margin-bottom: 8px; }
+    #overlay p  { font-size: 1rem; color: #aaa; margin-bottom: 22px; text-align: center; padding: 0 20px; }
+    #overlay button { padding: 11px 34px; font-size: 1rem; background: #e94560; color: #fff; border: none; border-radius: 30px; cursor: pointer; letter-spacing: 1px; }
+    #overlay button:hover { background: #c73652; }
+    #notification { position: fixed; top: 18px; background: #e94560; color: #fff; padding: 9px 22px; border-radius: 20px; font-size: .95rem; font-weight: bold; opacity: 0; transition: opacity .4s; pointer-events: none; z-index: 20; }
+
+    /* ── Language picker ── */
+    #langToggle {
+      position: fixed; top: 12px; right: 12px; z-index: 200;
+      background: #16213e; border: 1px solid #333; color: #fff;
+      font-size: 1.3rem; width: 38px; height: 38px; border-radius: 50%;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    #langToggle:hover { border-color: #e94560; box-shadow: 0 0 10px #e9456055; }
+    #langPanel {
+      position: fixed; top: 58px; right: 12px; z-index: 199;
+      background: #16213e; border: 1px solid #333; border-radius: 12px;
+      padding: 10px; display: none; flex-direction: column; gap: 8px;
+      box-shadow: 0 6px 30px rgba(0,0,0,.8); min-width: 260px;
+    }
+    #langPanel.open { display: flex; }
+    #langSearch {
+      width: 100%; padding: 6px 10px; background: #0f1929; border: 1px solid #333;
+      border-radius: 8px; color: #eee; font-size: .85rem; outline: none;
+    }
+    #langSearch:focus { border-color: #e94560; }
+    #langGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; max-height: 320px; overflow-y: auto; }
+    #langGrid::-webkit-scrollbar { width: 4px; }
+    #langGrid::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    .lang-btn {
+      display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+      background: #0f1929; border: 1px solid #222; border-radius: 8px;
+      color: #aaa; font-size: .8rem; cursor: pointer; transition: all .15s; text-align: left;
+    }
+    .lang-btn:hover { border-color: #e94560; color: #fff; }
+    .lang-btn.active { border-color: #e94560; color: #fff; background: #1a0a10; }
+    .lang-btn .flag { font-size: 1rem; }
+
+    /* ── Start screen ── */
+    #startScreen { position: fixed; inset: 0; background: #0d0d1f; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; overflow: hidden; }
+    .floaters { position: absolute; inset: 0; pointer-events: none; }
+    .floater { position: absolute; animation: floatUp linear infinite; opacity: 0; user-select: none; }
+    @keyframes floatUp { 0%{transform:translateY(110vh);opacity:0} 10%{opacity:.15} 90%{opacity:.08} 100%{transform:translateY(-10vh);opacity:0} }
+    #startTitle { font-size: clamp(2.5rem,8vw,5rem); font-weight: 900; color: #e94560; text-transform: uppercase; letter-spacing: 6px; text-align: center; text-shadow: 0 0 20px #e9456066; animation: fadeGlow 3s ease-in-out infinite; position: relative; z-index: 2; line-height: 1.1; }
+    @keyframes fadeGlow { 0%,100%{text-shadow:0 0 20px #e9456044} 50%{text-shadow:0 0 40px #e94560aa} }
+    #startSub { margin-top: 16px; font-size: clamp(.9rem,2.5vw,1.1rem); color: #666; letter-spacing: 3px; text-transform: uppercase; position: relative; z-index: 2; }
+    #startBtn { margin-top: 50px; padding: 14px 44px; font-size: 1rem; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; background: #e94560; color: #fff; border: none; border-radius: 30px; cursor: pointer; position: relative; z-index: 2; transition: all .2s; box-shadow: 0 4px 20px #e9456055; }
+    #startBtn:hover { background: #c73652; box-shadow: 0 6px 28px #e9456088; transform: translateY(-2px); }
+    #bloodDrips { display: none; }
+  </style>
+</head>
+<body>
+  <button id="langToggle" title="Language">🌐</button>
+  <div id="langPanel">
+    <input id="langSearch" placeholder="Search language..." autocomplete="off" />
+    <div id="langGrid"></div>
+  </div>
+
+  <h1 id="gameTitle">MAZE GAME</h1>
+  <div id="levelName"></div>
+  <div id="info">
+    <span><span id="labelLevel">Level</span>: <b id="levelDisplay">1</b></span>
+    <span><span id="labelTime">Time</span>: <b id="timer">0s</b></span>
+    <span><span id="labelMoves">Moves</span>: <b id="moves">0</b></span>
+  </div>
+  <div id="keyStatus">🔑 <span id="keyText"></span></div>
+  <div id="difficulty"></div>
+  <canvas id="canvas"></canvas>
+  <div id="controls">Arrow keys or WASD to move</div>
+  <div id="overlay"><h2 id="overlayTitle"></h2><p id="overlayMsg"></p><button id="overlayBtn"></button></div>
+  <div id="notification"></div>
+
+  <div id="startScreen">
+    <div id="bloodDrips"></div>
+    <div class="floaters" id="floaters"></div>
+    <div id="startTitle">Your<br>Nightmares</div>
+    <div id="startSub">There is no escape</div>
+    <button id="startBtn">Enter... if you dare</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx    = canvas.getContext('2d');
+    const DR = [-1,0,1,0], DC = [0,1,0,-1];
+
+    // ── All translations ───────────────────────────────────────────────────────
+    const LANGS = [
+      { code:'en', flag:'🇬🇧', name:'English' },
+      { code:'es', flag:'🇪🇸', name:'Español' },
+      { code:'fr', flag:'🇫🇷', name:'Français' },
+      { code:'de', flag:'🇩🇪', name:'Deutsch' },
+      { code:'pt', flag:'🇧🇷', name:'Português' },
+      { code:'it', flag:'🇮🇹', name:'Italiano' },
+      { code:'ru', flag:'🇷🇺', name:'Русский' },
+      { code:'ja', flag:'🇯🇵', name:'日本語' },
+      { code:'zh', flag:'🇨🇳', name:'中文' },
+      { code:'ar', flag:'🇸🇦', name:'العربية' },
+      { code:'ko', flag:'🇰🇷', name:'한국어' },
+      { code:'nl', flag:'🇳🇱', name:'Nederlands' },
+      { code:'pl', flag:'🇵🇱', name:'Polski' },
+      { code:'tr', flag:'🇹🇷', name:'Türkçe' },
+      { code:'hi', flag:'🇮🇳', name:'हिन्दी' },
+      { code:'sv', flag:'🇸🇪', name:'Svenska' },
+      { code:'id', flag:'🇮🇩', name:'Indonesia' },
+      { code:'vi', flag:'🇻🇳', name:'Tiếng Việt' },
+      { code:'el', flag:'🇬🇷', name:'Ελληνικά' },
+      { code:'uk', flag:'🇺🇦', name:'Українська' },
+    ];
+
+    const TRANSLATIONS = {
+      en: {
+        gameTitle:'MAZE GAME', startTitle:'Your<br>Nightmares', startSub:'There is no escape', startBtn:'Enter... if you dare',
+        labelLevel:'Level', labelTime:'Time', labelMoves:'Moves', controls:'Arrow keys or WASD to move',
+        keyFind:'Find the key!', keyGot:'Key collected — exit is open!', keyNotify:'🔑 Key collected! Exit is now open!',
+        nextBtn:'Try the next level', retryBtn:'Retry', caughtTitle:'💀 Caught!',
+        caughtMsg:n=>`You were caught on "${n}". Try again!`, winTitle:'you escaped… for now',
+        taunts:['You got lucky. You cannot pass the others.','Enjoy it. The next level will break you.','You think you escaped? The nightmare is just beginning.','This means nothing. You will not survive what comes next.','Keep running. There is no way out of the others.','You cannot pass the other levels. No one ever does.'],
+        levelNames:['The Beginning','The Hunter','Lights Out','Double Trouble','Find the Key','Nightmare','The Final Door'],
+        levelNotes:['🚪 There is no way out…','👁️ Something is in here with you. There is no way out.','🌑 The darkness swallows you. There is no way out.','👥 They are everywhere. There is no way out.','🔑 The exit is locked. There is no way out.','💀 You will never leave. There is no way out.','🚷 This is the end. There is truly no way out.'],
+        diffEnemy:'enemy', diffFog:'Fog r=', diffKey:'Key required',
+      },
+      es: {
+        gameTitle:'LABERINTO', startTitle:'Tus<br>Pesadillas', startSub:'No hay salida', startBtn:'Entrar... si te atreves',
+        labelLevel:'Nivel', labelTime:'Tiempo', labelMoves:'Pasos', controls:'Flechas o WASD para mover',
+        keyFind:'¡Encuentra la llave!', keyGot:'Llave recogida — ¡salida abierta!', keyNotify:'🔑 ¡Llave recogida! Salida abierta.',
+        nextBtn:'Intentar el siguiente nivel', retryBtn:'Reintentar', caughtTitle:'💀 ¡Atrapado!',
+        caughtMsg:n=>`Te atraparon en "${n}". ¡Inténtalo de nuevo!`, winTitle:'escapaste… por ahora',
+        taunts:['Tuviste suerte. No podrás pasar los demás.','Disfrútalo. El siguiente nivel te destruirá.','¿Crees que escapaste? La pesadilla apenas comienza.','No significa nada. No sobrevivirás lo que sigue.','Sigue corriendo. No hay salida de los demás.','No puedes pasar los otros niveles. Nadie lo logra.'],
+        levelNames:['El Comienzo','El Cazador','Luces Apagadas','Doble Problema','Encuentra la Llave','Pesadilla','La Puerta Final'],
+        levelNotes:['🚪 No hay salida…','👁️ Algo está aquí contigo. No hay salida.','🌑 La oscuridad te traga. No hay salida.','👥 Están en todas partes. No hay salida.','🔑 La salida está cerrada. No hay salida.','💀 Nunca te irás. No hay salida.','🚷 Este es el fin. Definitivamente no hay salida.'],
+        diffEnemy:'enemigo', diffFog:'Niebla r=', diffKey:'Llave requerida',
+      },
+      fr: {
+        gameTitle:'LABYRINTHE', startTitle:'Tes<br>Cauchemars', startSub:"Il n'y a pas d'issue", startBtn:"Entrer... si tu l'oses",
+        labelLevel:'Niveau', labelTime:'Temps', labelMoves:'Pas', controls:'Flèches ou WASD pour bouger',
+        keyFind:'Trouve la clé !', keyGot:"Clé trouvée — sortie ouverte !", keyNotify:'🔑 Clé trouvée ! Sortie ouverte.',
+        nextBtn:'Essayer le niveau suivant', retryBtn:'Réessayer', caughtTitle:'💀 Attrapé !',
+        caughtMsg:n=>`Tu as été attrapé sur "${n}". Réessaie !`, winTitle:"tu t'es échappé… pour l'instant",
+        taunts:["Tu as eu de la chance. Tu ne passeras pas les autres.","Profites-en. Le niveau suivant va te briser.","Tu crois t'être échappé ? Le cauchemar commence à peine.","Ça ne veut rien dire. Tu ne survivras pas à la suite.","Continue à courir. Il n'y a pas d'issue aux autres.","Tu ne peux pas passer les autres niveaux. Personne n'y arrive."],
+        levelNames:['Le Début','Le Chasseur','Lumières Éteintes','Double Peine','Trouve la Clé','Cauchemar','La Porte Finale'],
+        levelNotes:["🚪 Il n'y a pas d'issue…","👁️ Quelque chose est ici avec toi. Il n'y a pas d'issue.","🌑 L'obscurité t'engloutit. Il n'y a pas d'issue.","👥 Ils sont partout. Il n'y a pas d'issue.","🔑 La sortie est verrouillée. Il n'y a pas d'issue.","💀 Tu ne partiras jamais. Il n'y a pas d'issue.","🚷 C'est la fin. Il n'y a vraiment pas d'issue."],
+        diffEnemy:'ennemi', diffFog:'Brouillard r=', diffKey:'Clé requise',
+      },
+      de: {
+        gameTitle:'LABYRINTH', startTitle:'Deine<br>Alpträume', startSub:'Es gibt keinen Ausweg', startBtn:'Eintreten... wenn du dich traust',
+        labelLevel:'Level', labelTime:'Zeit', labelMoves:'Schritte', controls:'Pfeiltasten oder WASD bewegen',
+        keyFind:'Finde den Schlüssel!', keyGot:'Schlüssel gefunden — Ausgang offen!', keyNotify:'🔑 Schlüssel gefunden! Ausgang offen.',
+        nextBtn:'Nächstes Level versuchen', retryBtn:'Erneut versuchen', caughtTitle:'💀 Erwischt!',
+        caughtMsg:n=>`Du wurdest auf "${n}" erwischt. Versuch es nochmal!`, winTitle:'du bist entkommen… vorerst',
+        taunts:['Du hattest Glück. Die anderen wirst du nicht schaffen.','Genieß es. Das nächste Level wird dich brechen.','Du denkst, du bist entkommen? Der Albtraum beginnt erst.','Das bedeutet nichts. Das Nächste wirst du nicht überleben.','Lauf weiter. Es gibt keinen Ausweg aus den anderen.','Du kannst die anderen Level nicht bestehen. Niemand schafft das.'],
+        levelNames:['Der Anfang','Der Jäger','Licht aus','Doppelte Last','Finde den Schlüssel','Albtraum','Die letzte Tür'],
+        levelNotes:['🚪 Es gibt keinen Ausweg…','👁️ Etwas ist hier bei dir. Es gibt keinen Ausweg.','🌑 Die Dunkelheit verschluckt dich. Es gibt keinen Ausweg.','👥 Sie sind überall. Es gibt keinen Ausweg.','🔑 Der Ausgang ist verschlossen. Es gibt keinen Ausweg.','💀 Du wirst nie gehen. Es gibt keinen Ausweg.','🚷 Das ist das Ende. Es gibt wirklich keinen Ausweg.'],
+        diffEnemy:'Feind', diffFog:'Nebel r=', diffKey:'Schlüssel nötig',
+      },
+      pt: {
+        gameTitle:'LABIRINTO', startTitle:'Seus<br>Pesadelos', startSub:'Não há saída', startBtn:'Entrar... se você ousar',
+        labelLevel:'Nível', labelTime:'Tempo', labelMoves:'Passos', controls:'Setas ou WASD para mover',
+        keyFind:'Encontre a chave!', keyGot:'Chave coletada — saída aberta!', keyNotify:'🔑 Chave coletada! Saída aberta.',
+        nextBtn:'Tentar o próximo nível', retryBtn:'Tentar novamente', caughtTitle:'💀 Pego!',
+        caughtMsg:n=>`Você foi pego em "${n}". Tente novamente!`, winTitle:'você escapou… por enquanto',
+        taunts:['Você teve sorte. Não vai passar nos outros.','Aproveite. O próximo nível vai te quebrar.','Acha que escapou? O pesadelo está apenas começando.','Isso não significa nada. Você não vai sobreviver ao próximo.','Continue correndo. Não há saída dos outros.','Você não pode passar os outros níveis. Ninguém consegue.'],
+        levelNames:['O Começo','O Caçador','Luzes Apagadas','Problema Duplo','Encontre a Chave','Pesadelo','A Porta Final'],
+        levelNotes:['🚪 Não há saída…','👁️ Algo está aqui com você. Não há saída.','🌑 A escuridão te engole. Não há saída.','👥 Eles estão em todo lugar. Não há saída.','🔑 A saída está trancada. Não há saída.','💀 Você nunca vai sair. Não há saída.','🚷 Este é o fim. Definitivamente não há saída.'],
+        diffEnemy:'inimigo', diffFog:'Névoa r=', diffKey:'Chave necessária',
+      },
+      it: {
+        gameTitle:'LABIRINTO', startTitle:'I Tuoi<br>Incubi', startSub:"Non c'è via d'uscita", startBtn:'Entra... se hai il coraggio',
+        labelLevel:'Livello', labelTime:'Tempo', labelMoves:'Passi', controls:'Frecce o WASD per muoversi',
+        keyFind:'Trova la chiave!', keyGot:"Chiave raccolta — uscita aperta!", keyNotify:"🔑 Chiave raccolta! Uscita aperta.",
+        nextBtn:'Prova il prossimo livello', retryBtn:'Riprova', caughtTitle:'💀 Preso!',
+        caughtMsg:n=>`Sei stato preso su "${n}". Riprova!`, winTitle:'sei scappato… per ora',
+        taunts:["Hai avuto fortuna. Non passerai gli altri.","Goditi questo. Il prossimo livello ti spezzerà.","Pensi di essere scappato? L'incubo sta solo iniziando.","Non significa nulla. Non sopravviverai a ciò che viene dopo.","Continua a correre. Non c'è via d'uscita dagli altri.","Non puoi superare gli altri livelli. Nessuno ci riesce."],
+        levelNames:["L'Inizio","Il Cacciatore","Luci Spente","Doppio Guaio","Trova la Chiave","Incubo","La Porta Finale"],
+        levelNotes:["🚪 Non c'è via d'uscita…","👁️ Qualcosa è qui con te. Non c'è via d'uscita.","🌑 L'oscurità ti inghiotte. Non c'è via d'uscita.","👥 Sono ovunque. Non c'è via d'uscita.","🔑 L'uscita è bloccata. Non c'è via d'uscita.","💀 Non te ne andrai mai. Non c'è via d'uscita.","🚷 Questa è la fine. Non c'è davvero via d'uscita."],
+        diffEnemy:'nemico', diffFog:'Nebbia r=', diffKey:'Chiave richiesta',
+      },
+      ru: {
+        gameTitle:'ЛАБИРИНТ', startTitle:'Твои<br>Кошмары', startSub:'Выхода нет', startBtn:'Войди... если осмелишься',
+        labelLevel:'Уровень', labelTime:'Время', labelMoves:'Ходы', controls:'Стрелки или WASD для движения',
+        keyFind:'Найди ключ!', keyGot:'Ключ найден — выход открыт!', keyNotify:'🔑 Ключ найден! Выход открыт.',
+        nextBtn:'Попробовать следующий уровень', retryBtn:'Повторить', caughtTitle:'💀 Пойман!',
+        caughtMsg:n=>`Тебя поймали на "${n}". Попробуй снова!`, winTitle:'ты сбежал… пока что',
+        taunts:['Тебе повезло. Остальные ты не пройдёшь.','Наслаждайся. Следующий уровень сломает тебя.','Думаешь, сбежал? Кошмар только начинается.','Это ничего не значит. Ты не выживешь в следующем.','Беги дальше. Из остальных нет выхода.','Ты не пройдёшь другие уровни. Никто не проходит.'],
+        levelNames:['Начало','Охотник','Темнота','Двойная Беда','Найди Ключ','Кошмар','Последняя Дверь'],
+        levelNotes:['🚪 Выхода нет…','👁️ Здесь кто-то есть с тобой. Выхода нет.','🌑 Тьма поглощает тебя. Выхода нет.','👥 Они повсюду. Выхода нет.','🔑 Выход закрыт. Выхода нет.','💀 Ты никогда не уйдёшь. Выхода нет.','🚷 Это конец. Выхода действительно нет.'],
+        diffEnemy:'враг', diffFog:'Туман r=', diffKey:'Нужен ключ',
+      },
+      ja: {
+        gameTitle:'迷路ゲーム', startTitle:'あなたの<br>悪夢', startSub:'逃げ場はない', startBtn:'入れ…できるなら',
+        labelLevel:'レベル', labelTime:'時間', labelMoves:'移動', controls:'矢印キーまたはWASDで移動',
+        keyFind:'鍵を見つけろ！', keyGot:'鍵を入手 — 出口が開いた！', keyNotify:'🔑 鍵を入手！出口が開いた。',
+        nextBtn:'次のレベルへ', retryBtn:'やり直す', caughtTitle:'💀 捕まった！',
+        caughtMsg:n=>`「${n}」で捕まった。もう一度！`, winTitle:'逃げた…今のところ',
+        taunts:['運が良かった。他のレベルは無理だ。','楽しんで。次のレベルで砕かれる。','逃げたと思う？悪夢は始まったばかり。','意味がない。次で生き延びられない。','走り続けろ。他に出口はない。','他のレベルは越えられない。誰もできない。'],
+        levelNames:['はじまり','ハンター','暗闇','二重の罠','鍵を探せ','悪夢','最後の扉'],
+        levelNotes:['🚪 出口はない…','👁️ 何かがここにいる。出口はない。','🌑 暗闇があなたを飲み込む。出口はない。','👥 あちこちにいる。出口はない。','🔑 出口は封鎖された。出口はない。','💀 あなたは永遠に出られない。出口はない。','🚷 これが終わりだ。本当に出口はない。'],
+        diffEnemy:'敵', diffFog:'霧 r=', diffKey:'鍵が必要',
+      },
+      zh: {
+        gameTitle:'迷宫游戏', startTitle:'你的<br>噩梦', startSub:'无路可逃', startBtn:'进入…如果你敢',
+        labelLevel:'关卡', labelTime:'时间', labelMoves:'步数', controls:'方向键或WASD移动',
+        keyFind:'找到钥匙！', keyGot:'获得钥匙 — 出口已开！', keyNotify:'🔑 获得钥匙！出口已开。',
+        nextBtn:'挑战下一关', retryBtn:'重试', caughtTitle:'💀 被抓了！',
+        caughtMsg:n=>`你在"${n}"被抓住了。再试一次！`, winTitle:'你逃脱了…暂时',
+        taunts:['你只是运气好。其他关卡你过不了。','好好享受。下一关会让你崩溃。','以为逃了？噩梦才刚刚开始。','这没有意义。你不会在下一关生存。','继续跑吧。其他关卡没有出口。','你无法通过其他关卡。没有人能做到。'],
+        levelNames:['开始','猎手','黑暗','双重麻烦','找钥匙','噩梦','最终之门'],
+        levelNotes:['🚪 无路可逃…','👁️ 有东西在这里。无路可逃。','🌑 黑暗吞噬你。无路可逃。','👥 他们无处不在。无路可逃。','🔑 出口被锁住了。无路可逃。','💀 你永远走不了。无路可逃。','🚷 这是终点。真的无路可逃。'],
+        diffEnemy:'敌人', diffFog:'雾 r=', diffKey:'需要钥匙',
+      },
+      ar: {
+        gameTitle:'المتاهة', startTitle:'كوابيسك', startSub:'لا مفر', startBtn:'ادخل... إن جرؤت',
+        labelLevel:'المستوى', labelTime:'الوقت', labelMoves:'الخطوات', controls:'الأسهم أو WASD للتحرك',
+        keyFind:'ابحث عن المفتاح!', keyGot:'تم الحصول على المفتاح — المخرج مفتوح!', keyNotify:'🔑 تم الحصول على المفتاح!',
+        nextBtn:'جرب المستوى التالي', retryBtn:'أعد المحاولة', caughtTitle:'💀 تم القبض عليك!',
+        caughtMsg:n=>`تم القبض عليك في "${n}". حاول مرة أخرى!`, winTitle:'هربت… في الوقت الحالي',
+        taunts:['كنت محظوظاً. لن تتجاوز الآخرين.','استمتع به. المستوى التالي سيحطمك.','تظن أنك هربت؟ الكابوس بدأ للتو.','هذا لا يعني شيئاً. لن تنجو مما يلي.','استمر في الركض. لا مفر من الآخرين.','لا يمكنك تجاوز المستويات الأخرى. لا أحد يفعل ذلك.'],
+        levelNames:['البداية','الصياد','أطفئ الأنوار','مشكلة مزدوجة','ابحث عن المفتاح','كابوس','الباب الأخير'],
+        levelNotes:['🚪 لا مفر…','👁️ شيء ما هنا معك. لا مفر.','🌑 الظلام يبتلعك. لا مفر.','👥 إنهم في كل مكان. لا مفر.','🔑 المخرج مغلق. لا مفر.','💀 لن تغادر أبداً. لا مفر.','🚷 هذه هي النهاية. لا مفر حقاً.'],
+        diffEnemy:'عدو', diffFog:'ضباب r=', diffKey:'مفتاح مطلوب',
+      },
+      ko: {
+        gameTitle:'미로 게임', startTitle:'당신의<br>악몽', startSub:'탈출구는 없다', startBtn:'들어가라... 용기 있다면',
+        labelLevel:'레벨', labelTime:'시간', labelMoves:'이동', controls:'방향키 또는 WASD로 이동',
+        keyFind:'열쇠를 찾아라!', keyGot:'열쇠 획득 — 출구가 열렸다!', keyNotify:'🔑 열쇠 획득! 출구가 열렸습니다.',
+        nextBtn:'다음 레벨 도전', retryBtn:'다시 시도', caughtTitle:'💀 잡혔다!',
+        caughtMsg:n=>`"${n}"에서 잡혔습니다. 다시 시도!`, winTitle:'탈출했다… 지금은',
+        taunts:['운이 좋았을 뿐. 나머지는 못 통과해.','즐겨라. 다음 레벨이 너를 부술 거야.','탈출했다고? 악몽은 이제 시작이야.','아무 의미 없어. 다음에서 살아남지 못해.','계속 달려. 나머지엔 출구가 없어.','다른 레벨은 넘을 수 없어. 아무도 못 해.'],
+        levelNames:['시작','사냥꾼','암흑','이중 위험','열쇠 찾기','악몽','마지막 문'],
+        levelNotes:['🚪 탈출구는 없다…','👁️ 무언가 여기 있다. 탈출구는 없다.','🌑 어둠이 너를 삼킨다. 탈출구는 없다.','👥 그들은 어디에나 있다. 탈출구는 없다.','🔑 출구가 잠겼다. 탈출구는 없다.','💀 넌 절대 떠나지 못해. 탈출구는 없다.','🚷 이것이 끝이다. 정말로 탈출구는 없다.'],
+        diffEnemy:'적', diffFog:'안개 r=', diffKey:'열쇠 필요',
+      },
+      nl: {
+        gameTitle:'DOOLHOF', startTitle:'Jouw<br>Nachtmerries', startSub:'Er is geen uitweg', startBtn:'Ga naar binnen... als je durft',
+        labelLevel:'Niveau', labelTime:'Tijd', labelMoves:'Stappen', controls:'Pijltjestoetsen of WASD bewegen',
+        keyFind:'Vind de sleutel!', keyGot:'Sleutel gevonden — uitgang open!', keyNotify:'🔑 Sleutel gevonden! Uitgang open.',
+        nextBtn:'Probeer het volgende niveau', retryBtn:'Opnieuw proberen', caughtTitle:'💀 Gevangen!',
+        caughtMsg:n=>`Je werd gevangen op "${n}". Probeer het opnieuw!`, winTitle:'je ontsnapte… voor nu',
+        taunts:['Je had geluk. De anderen ga je niet halen.','Geniet ervan. Het volgende niveau breekt je.','Je denkt dat je ontsnapte? De nachtmerrie begint pas.','Dit betekent niets. Het volgende ga je niet overleven.','Blijf rennen. Er is geen uitweg uit de anderen.','Je kunt de andere niveaus niet halen. Niemand doet dat.'],
+        levelNames:['Het Begin','De Jager','Lichten Uit','Dubbele Last','Vind de Sleutel','Nachtmerrie','De Laatste Deur'],
+        levelNotes:['🚪 Er is geen uitweg…','👁️ Iets is hier met jou. Er is geen uitweg.','🌑 De duisternis slokt je op. Er is geen uitweg.','👥 Ze zijn overal. Er is geen uitweg.','🔑 De uitgang is vergrendeld. Er is geen uitweg.','💀 Je gaat nooit weg. Er is geen uitweg.','🚷 Dit is het einde. Er is echt geen uitweg.'],
+        diffEnemy:'vijand', diffFog:'Mist r=', diffKey:'Sleutel vereist',
+      },
+      pl: {
+        gameTitle:'LABIRYNT', startTitle:'Twoje<br>Koszmary', startSub:'Nie ma wyjścia', startBtn:'Wejdź... jeśli masz odwagę',
+        labelLevel:'Poziom', labelTime:'Czas', labelMoves:'Kroki', controls:'Strzałki lub WASD do poruszania',
+        keyFind:'Znajdź klucz!', keyGot:'Klucz znaleziony — wyjście otwarte!', keyNotify:'🔑 Klucz znaleziony! Wyjście otwarte.',
+        nextBtn:'Spróbuj następnego poziomu', retryBtn:'Spróbuj ponownie', caughtTitle:'💀 Złapany!',
+        caughtMsg:n=>`Zostałeś złapany na "${n}". Spróbuj ponownie!`, winTitle:'uciekłeś… na razie',
+        taunts:['Miałeś szczęście. Innych nie przejdziesz.','Ciesz się tym. Następny poziom cię złamie.','Myślisz, że uciekłeś? Koszmar dopiero się zaczyna.','To nic nie znaczy. Następnego nie przeżyjesz.','Biegnij dalej. Z innych nie ma wyjścia.','Nie możesz przejść innych poziomów. Nikomu się nie udało.'],
+        levelNames:['Początek','Łowca','Ciemność','Podwójne Kłopoty','Znajdź Klucz','Koszmar','Ostatnie Drzwi'],
+        levelNotes:['🚪 Nie ma wyjścia…','👁️ Coś tu jest z tobą. Nie ma wyjścia.','🌑 Ciemność cię pochłania. Nie ma wyjścia.','👥 Są wszędzie. Nie ma wyjścia.','🔑 Wyjście jest zamknięte. Nie ma wyjścia.','💀 Nigdy stąd nie wyjdziesz. Nie ma wyjścia.','🚷 To jest koniec. Naprawdę nie ma wyjścia.'],
+        diffEnemy:'wróg', diffFog:'Mgła r=', diffKey:'Klucz wymagany',
+      },
+      tr: {
+        gameTitle:'LABİRENT', startTitle:'Senin<br>Kabusların', startSub:'Çıkış yolu yok', startBtn:'Gir... cesaretsen',
+        labelLevel:'Seviye', labelTime:'Süre', labelMoves:'Adım', controls:'Ok tuşları veya WASD ile hareket et',
+        keyFind:'Anahtarı bul!', keyGot:'Anahtar alındı — çıkış açık!', keyNotify:'🔑 Anahtar alındı! Çıkış açık.',
+        nextBtn:'Sonraki seviyeyi dene', retryBtn:'Tekrar dene', caughtTitle:'💀 Yakalandın!',
+        caughtMsg:n=>`"${n}" seviyesinde yakalandın. Tekrar dene!`, winTitle:'kaçtın… şimdilik',
+        taunts:['Şansın vardı. Diğerlerini geçemezsin.','Tadını çıkar. Sonraki seviye seni kıracak.','Kaçtığını mı sanıyorsun? Kabus daha yeni başladı.','Bu hiçbir şey ifade etmez. Sonrakinden kurtulamazsın.','Koşmaya devam et. Diğerlerinden çıkış yok.','Diğer seviyeleri geçemezsin. Kimse geçemedi.'],
+        levelNames:['Başlangıç','Avcı','Karanlık','Çifte Bela','Anahtarı Bul','Kabus','Son Kapı'],
+        levelNotes:['🚪 Çıkış yolu yok…','👁️ Burada seninle bir şey var. Çıkış yolu yok.','🌑 Karanlık seni yutuyor. Çıkış yolu yok.','👥 Her yerdeler. Çıkış yolu yok.','🔑 Çıkış kilitli. Çıkış yolu yok.','💀 Asla çıkamayacaksın. Çıkış yolu yok.','🚷 Bu son. Gerçekten çıkış yolu yok.'],
+        diffEnemy:'düşman', diffFog:'Sis r=', diffKey:'Anahtar gerekli',
+      },
+      hi: {
+        gameTitle:'भूलभुलैया', startTitle:'तुम्हारे<br>बुरे सपने', startSub:'कोई रास्ता नहीं', startBtn:'अंदर आओ... अगर हिम्मत है',
+        labelLevel:'स्तर', labelTime:'समय', labelMoves:'कदम', controls:'एरो या WASD से चलो',
+        keyFind:'चाबी खोजो!', keyGot:'चाबी मिली — निकास खुला है!', keyNotify:'🔑 चाबी मिली! निकास खुला है।',
+        nextBtn:'अगला स्तर आज़माओ', retryBtn:'फिर कोशिश करो', caughtTitle:'💀 पकड़े गए!',
+        caughtMsg:n=>`तुम "${n}" में पकड़े गए। फिर कोशिश करो!`, winTitle:'भाग गए… अभी के लिए',
+        taunts:['तुम भाग्यशाली थे। बाकी नहीं पार कर पाओगे।','इसे भोगो। अगला स्तर तुम्हें तोड़ देगा।','सोचते हो बच गए? बुरा सपना तो अभी शुरू हुआ।','इसका कोई मतलब नहीं। अगले में नहीं बचोगे।','भागते रहो। बाकी में कोई रास्ता नहीं।','दूसरे स्तर नहीं पार कर सकते। कोई नहीं कर सका।'],
+        levelNames:['शुरुआत','शिकारी','अंधेरा','दोहरी मुसीबत','चाबी खोजो','बुरा सपना','आखिरी दरवाज़ा'],
+        levelNotes:['🚪 कोई रास्ता नहीं…','👁️ यहाँ कुछ है तुम्हारे साथ। कोई रास्ता नहीं।','🌑 अंधेरा तुम्हें निगल रहा है। कोई रास्ता नहीं।','👥 वे हर जगह हैं। कोई रास्ता नहीं।','🔑 निकास बंद है। कोई रास्ता नहीं।','💀 तुम कभी नहीं जाओगे। कोई रास्ता नहीं।','🚷 यही अंत है। सच में कोई रास्ता नहीं।'],
+        diffEnemy:'दुश्मन', diffFog:'कोहरा r=', diffKey:'चाबी जरूरी',
+      },
+      sv: {
+        gameTitle:'LABYRINT', startTitle:'Dina<br>Mardrömmar', startSub:'Det finns ingen utväg', startBtn:'Gå in... om du vågar',
+        labelLevel:'Nivå', labelTime:'Tid', labelMoves:'Steg', controls:'Piltangenter eller WASD för att röra dig',
+        keyFind:'Hitta nyckeln!', keyGot:'Nyckel hittad — utgången är öppen!', keyNotify:'🔑 Nyckel hittad! Utgången är öppen.',
+        nextBtn:'Försök nästa nivå', retryBtn:'Försök igen', caughtTitle:'💀 Fångad!',
+        caughtMsg:n=>`Du fångades på "${n}". Försök igen!`, winTitle:'du flydde… för nu',
+        taunts:['Du hade tur. De andra klarar du inte.','Njut av det. Nästa nivå kommer bryta dig.','Du tror att du flydde? Mardrömmen har precis börjat.','Det betyder ingenting. Nästa överlever du inte.','Fortsätt springa. Det finns ingen utväg från de andra.','Du kan inte klara de andra nivåerna. Ingen gör det.'],
+        levelNames:['Början','Jägaren','Ljuset Slocknar','Dubbelt Besvär','Hitta Nyckeln','Mardröm','Den Sista Dörren'],
+        levelNotes:['🚪 Det finns ingen utväg…','👁️ Något är här med dig. Det finns ingen utväg.','🌑 Mörkret slukar dig. Det finns ingen utväg.','👥 De är överallt. Det finns ingen utväg.','🔑 Utgången är låst. Det finns ingen utväg.','💀 Du kommer aldrig lämna. Det finns ingen utväg.','🚷 Detta är slutet. Det finns verkligen ingen utväg.'],
+        diffEnemy:'fiende', diffFog:'Dimma r=', diffKey:'Nyckel krävs',
+      },
+      id: {
+        gameTitle:'LABIRIN', startTitle:'Mimpi<br>Burukmu', startSub:'Tidak ada jalan keluar', startBtn:'Masuk... jika berani',
+        labelLevel:'Level', labelTime:'Waktu', labelMoves:'Langkah', controls:'Tombol panah atau WASD untuk bergerak',
+        keyFind:'Temukan kunci!', keyGot:'Kunci didapat — pintu keluar terbuka!', keyNotify:'🔑 Kunci didapat! Pintu keluar terbuka.',
+        nextBtn:'Coba level berikutnya', retryBtn:'Coba lagi', caughtTitle:'💀 Tertangkap!',
+        caughtMsg:n=>`Kamu tertangkap di "${n}". Coba lagi!`, winTitle:'kamu lolos… untuk sekarang',
+        taunts:['Kamu beruntung. Yang lain tidak bisa kamu lewati.','Nikmati. Level berikutnya akan menghancurkanmu.','Kira kira sudah lolos? Mimpi buruk baru saja dimulai.','Ini tidak berarti apa-apa. Kamu tidak akan bertahan di berikutnya.','Terus berlari. Tidak ada jalan keluar dari yang lain.','Kamu tidak bisa melewati level lain. Tidak ada yang bisa.'],
+        levelNames:['Awal','Pemburu','Gelap Gulita','Masalah Ganda','Temukan Kunci','Mimpi Buruk','Pintu Terakhir'],
+        levelNotes:['🚪 Tidak ada jalan keluar…','👁️ Ada sesuatu di sini bersamamu. Tidak ada jalan keluar.','🌑 Kegelapan menelanmu. Tidak ada jalan keluar.','👥 Mereka ada di mana-mana. Tidak ada jalan keluar.','🔑 Pintu keluar terkunci. Tidak ada jalan keluar.','💀 Kamu tidak akan pernah pergi. Tidak ada jalan keluar.','🚷 Ini adalah akhir. Benar-benar tidak ada jalan keluar.'],
+        diffEnemy:'musuh', diffFog:'Kabut r=', diffKey:'Kunci diperlukan',
+      },
+      vi: {
+        gameTitle:'MÊ CUNG', startTitle:'Ác Mộng<br>Của Bạn', startSub:'Không có lối thoát', startBtn:'Bước vào... nếu bạn dám',
+        labelLevel:'Màn', labelTime:'Thời gian', labelMoves:'Bước', controls:'Phím mũi tên hoặc WASD để di chuyển',
+        keyFind:'Tìm chìa khóa!', keyGot:'Đã lấy chìa khóa — lối ra mở!', keyNotify:'🔑 Đã lấy chìa khóa! Lối ra mở.',
+        nextBtn:'Thử màn tiếp theo', retryBtn:'Thử lại', caughtTitle:'💀 Bị bắt!',
+        caughtMsg:n=>`Bạn bị bắt ở "${n}". Thử lại!`, winTitle:'bạn đã thoát… tạm thời',
+        taunts:['Bạn may mắn thôi. Không qua được các màn khác đâu.','Tận hưởng đi. Màn tiếp theo sẽ nghiền nát bạn.','Bạn nghĩ đã thoát? Ác mộng mới chỉ bắt đầu.','Điều này vô nghĩa. Bạn sẽ không sống sót ở màn tiếp theo.','Cứ chạy đi. Không có lối thoát từ các màn khác.','Bạn không thể qua các màn khác. Không ai làm được.'],
+        levelNames:['Bắt Đầu','Kẻ Săn Mồi','Tắt Đèn','Rắc Rối Đôi','Tìm Chìa Khóa','Ác Mộng','Cánh Cửa Cuối'],
+        levelNotes:['🚪 Không có lối thoát…','👁️ Có gì đó ở đây với bạn. Không có lối thoát.','🌑 Bóng tối nuốt chửng bạn. Không có lối thoát.','👥 Chúng ở khắp nơi. Không có lối thoát.','🔑 Lối ra bị khóa. Không có lối thoát.','💀 Bạn sẽ không bao giờ rời đi. Không có lối thoát.','🚷 Đây là kết thúc. Thực sự không có lối thoát.'],
+        diffEnemy:'kẻ thù', diffFog:'Sương r=', diffKey:'Cần chìa khóa',
+      },
+      el: {
+        gameTitle:'ΛΑΒΥΡΙΝΘΟΣ', startTitle:'Οι<br>Εφιάλτες σου', startSub:'Δεν υπάρχει διέξοδος', startBtn:'Μπες... αν τολμάς',
+        labelLevel:'Επίπεδο', labelTime:'Ώρα', labelMoves:'Βήματα', controls:'Βέλη ή WASD για κίνηση',
+        keyFind:'Βρες το κλειδί!', keyGot:'Κλειδί βρέθηκε — έξοδος ανοιχτή!', keyNotify:'🔑 Κλειδί βρέθηκε! Έξοδος ανοιχτή.',
+        nextBtn:'Δοκίμασε το επόμενο επίπεδο', retryBtn:'Ξαναπροσπάθησε', caughtTitle:'💀 Πιάστηκες!',
+        caughtMsg:n=>`Πιάστηκες στο "${n}". Ξαναπροσπάθησε!`, winTitle:'ξέφυγες… προς το παρόν',
+        taunts:['Είχες τύχη. Τα άλλα δεν θα τα περάσεις.','Απόλαυσέ το. Το επόμενο επίπεδο θα σε σπάσει.','Νομίζεις ξέφυγες; Ο εφιάλτης μόλις άρχισε.','Αυτό δεν σημαίνει τίποτα. Στο επόμενο δεν θα επιβιώσεις.','Συνέχισε να τρέχεις. Δεν υπάρχει διέξοδος από τα άλλα.','Δεν μπορείς να περάσεις τα άλλα επίπεδα. Κανείς δεν το έκανε.'],
+        levelNames:['Η Αρχή','Ο Κυνηγός','Σβήσε τα Φώτα','Διπλή Μπελά','Βρες το Κλειδί','Εφιάλτης','Η Τελευταία Πόρτα'],
+        levelNotes:['🚪 Δεν υπάρχει διέξοδος…','👁️ Κάτι είναι εδώ μαζί σου. Δεν υπάρχει διέξοδος.','🌑 Το σκοτάδι σε καταπίνει. Δεν υπάρχει διέξοδος.','👥 Είναι παντού. Δεν υπάρχει διέξοδος.','🔑 Η έξοδος είναι κλειδωμένη. Δεν υπάρχει διέξοδος.','💀 Δεν θα φύγεις ποτέ. Δεν υπάρχει διέξοδος.','🚷 Αυτό είναι το τέλος. Δεν υπάρχει πραγματικά διέξοδος.'],
+        diffEnemy:'εχθρός', diffFog:'Ομίχλη r=', diffKey:'Χρειάζεται κλειδί',
+      },
+      uk: {
+        gameTitle:'ЛАБІРИНТ', startTitle:'Твої<br>Кошмари', startSub:'Виходу немає', startBtn:'Увійди... якщо наважишся',
+        labelLevel:'Рівень', labelTime:'Час', labelMoves:'Ходи', controls:'Стрілки або WASD для руху',
+        keyFind:'Знайди ключ!', keyGot:'Ключ знайдено — вихід відкритий!', keyNotify:'🔑 Ключ знайдено! Вихід відкритий.',
+        nextBtn:'Спробувати наступний рівень', retryBtn:'Повторити', caughtTitle:'💀 Спіймано!',
+        caughtMsg:n=>`Тебе спіймали на "${n}". Спробуй ще раз!`, winTitle:'ти втік… поки що',
+        taunts:['Тобі пощастило. Інші ти не пройдеш.','Насолоджуйся. Наступний рівень зламає тебе.','Думаєш, втік? Жахіття тільки починається.','Це нічого не означає. Наступного ти не переживеш.','Біжи далі. З інших немає виходу.','Ти не пройдеш інші рівні. Ніхто не пройшов.'],
+        levelNames:['Початок','Мисливець','Темрява','Подвійна Біда','Знайди Ключ','Жахіття','Остання Двері'],
+        levelNotes:['🚪 Виходу немає…','👁️ Тут щось є з тобою. Виходу немає.','🌑 Темрява поглинає тебе. Виходу немає.','👥 Вони скрізь. Виходу немає.','🔑 Вихід замкнений. Виходу немає.','💀 Ти ніколи не підеш. Виходу немає.','🚷 Це кінець. Справді виходу немає.'],
+        diffEnemy:'ворог', diffFog:'Туман r=', diffKey:'Потрібен ключ',
+      },
+    };
+
+    let currentLang = 'en';
+    function t(k) { return TRANSLATIONS[currentLang][k]; }
+
+    function setLang(code) {
+      currentLang = code;
+      document.getElementById('gameTitle').textContent   = t('gameTitle');
+      document.getElementById('startTitle').innerHTML    = t('startTitle');
+      document.getElementById('startSub').textContent    = t('startSub');
+      document.getElementById('startBtn').textContent    = t('startBtn');
+      document.getElementById('labelLevel').textContent  = t('labelLevel');
+      document.getElementById('labelTime').textContent   = t('labelTime');
+      document.getElementById('labelMoves').textContent  = t('labelMoves');
+      document.getElementById('controls').textContent    = t('controls');
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === code));
+      if (level) { cfg = getConfig(level); document.getElementById('levelName').textContent = cfg.name.toUpperCase(); updateKeyStatus(); buildDifficultyText(); }
+    }
+
+    // ── Language panel UI ──────────────────────────────────────────────────────
+    const langGrid = document.getElementById('langGrid');
+    LANGS.forEach(({ code, flag, name }) => {
+      const btn = document.createElement('button');
+      btn.className = 'lang-btn' + (code === 'en' ? ' active' : '');
+      btn.dataset.lang = code;
+      btn.innerHTML = `<span class="flag">${flag}</span>${name}`;
+      btn.onclick = () => { setLang(code); closeLangPanel(); };
+      langGrid.appendChild(btn);
+    });
+
+    const langToggle = document.getElementById('langToggle');
+    const langPanel  = document.getElementById('langPanel');
+    const langSearch = document.getElementById('langSearch');
+
+    langToggle.addEventListener('click', e => { e.stopPropagation(); langPanel.classList.toggle('open'); if (langPanel.classList.contains('open')) { langSearch.value=''; filterLangs(''); langSearch.focus(); } });
+    document.addEventListener('click', () => closeLangPanel());
+    langPanel.addEventListener('click', e => e.stopPropagation());
+    langSearch.addEventListener('input', e => filterLangs(e.target.value));
+
+    function closeLangPanel() { langPanel.classList.remove('open'); }
+    function filterLangs(q) {
+      const query = q.toLowerCase();
+      langGrid.querySelectorAll('.lang-btn').forEach(btn => {
+        const match = btn.textContent.toLowerCase().includes(query) || btn.dataset.lang.includes(query);
+        btn.style.display = match ? '' : 'none';
+      });
+    }
+
+    // ── Level visual configs ───────────────────────────────────────────────────
+    const CONFIGS = [
+      { bg:'#0a0d1a', wall:'#4488ff', accent:'#4488ff', enemyCount:0, hasKey:false, fog:Infinity },
+      { bg:'#0a1a0a', wall:'#44dd77', accent:'#44dd77', enemyCount:1, hasKey:false, fog:Infinity },
+      { bg:'#110a1a', wall:'#aa44ff', accent:'#aa44ff', enemyCount:1, hasKey:false, fog:5 },
+      { bg:'#1a0e00', wall:'#ff7722', accent:'#ff7722', enemyCount:2, hasKey:false, fog:4 },
+      { bg:'#1a1800', wall:'#ffcc00', accent:'#ffcc00', enemyCount:0, hasKey:true,  fog:3 },
+      { bg:'#1a0000', wall:'#ff2244', accent:'#ff2244', enemyCount:3, hasKey:true,  fog:2 },
+      { bg:'#05050f', wall:'#ffffff', accent:'#ffffff', enemyCount:4, hasKey:true,  fog:2 },
+    ];
+    const MAX_LEVEL = 7;
+    function getConfig(lvl) {
+      const idx = Math.min(lvl-1, CONFIGS.length-1);
+      const cfg = { ...CONFIGS[idx] };
+      const ni  = Math.min(lvl-1, t('levelNames').length-1);
+      cfg.name  = t('levelNames')[ni];
+      cfg.note  = t('levelNotes')[ni];
+      if (lvl > CONFIGS.length) cfg.enemyCount = Math.min(4, CONFIGS[CONFIGS.length-1].enemyCount + (lvl-CONFIGS.length));
+      return cfg;
+    }
+    function getMazeSize(lvl)   { return Math.min(11+(lvl-1)*2, 31); }
+    function getEnemySpeed(lvl) { return Math.max(200, 900-(lvl-2)*80); }
+    function getChaseRadius(lvl){ return 6+(lvl-2)*2; }
+
+    // ── State ──────────────────────────────────────────────────────────────────
+    let CELL, COLS, ROWS, grid, player, enemies, keyItem;
+    let level, cfg, moveCount, startTime, timerInterval, enemyInterval;
+    let gameActive = false;
+
+    function cellAt(r,c){ if(r<0||c<0||r>=ROWS||c>=COLS) return null; return grid[r*COLS+c]; }
+    function shuffle(arr){ for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];} return arr; }
+
+    function generateMaze(r,c){ cellAt(r,c).visited=true; for(let d of shuffle([0,1,2,3])){const nr=r+DR[d],nc=c+DC[d],nb=cellAt(nr,nc);if(nb&&!nb.visited){cellAt(r,c).walls[d]=false;nb.walls[(d+2)%4]=false;generateMaze(nr,nc);}} }
+    function addLoops(n){ let rem=0; for(let i=0;i<n*20&&rem<n;i++){const r=Math.floor(Math.random()*ROWS),c=Math.floor(Math.random()*COLS),dir=Math.random()<.5?1:2,nr=r+DR[dir],nc=c+DC[dir],cell=cellAt(r,c),nb=cellAt(nr,nc);if(nb&&cell.walls[dir]){cell.walls[dir]=false;nb.walls[(dir+2)%4]=false;rem++;}} }
+
+    function bfsNextDir(fr,fc,tr,tc){
+      if(fr===tr&&fc===tc) return null;
+      const vis=new Uint8Array(ROWS*COLS),q=[];vis[fr*COLS+fc]=1;
+      for(let d=0;d<4;d++){if(!cellAt(fr,fc).walls[d]){const nr=fr+DR[d],nc=fc+DC[d],i=nr*COLS+nc;if(!vis[i]){vis[i]=1;q.push({r:nr,c:nc,dir:d});}}}
+      let qi=0;while(qi<q.length){const{r,c,dir}=q[qi++];if(r===tr&&c===tc) return dir;for(let d=0;d<4;d++){if(!cellAt(r,c).walls[d]){const nr=r+DR[d],nc=c+DC[d],i=nr*COLS+nc;if(!vis[i]){vis[i]=1;q.push({r:nr,c:nc,dir});}}}}
+      return null;
+    }
+
+    function initLevel(lvl){
+      level=lvl; cfg=getConfig(lvl); gameActive=false;
+      clearInterval(timerInterval); clearInterval(enemyInterval);
+      const size=getMazeSize(lvl); COLS=size; ROWS=size;
+      CELL=Math.max(12,Math.min(30,Math.floor(window.innerWidth*.93/size),Math.floor(window.innerHeight*.72/size)));
+      canvas.width=COLS*CELL; canvas.height=ROWS*CELL;
+      canvas.style.borderColor=cfg.accent; canvas.style.boxShadow=`0 0 30px ${cfg.accent}55`;
+      document.body.style.background=cfg.bg;
+      grid=Array.from({length:ROWS*COLS},(_,i)=>({r:Math.floor(i/COLS),c:i%COLS,visited:false,walls:[true,true,true,true]}));
+      generateMaze(0,0); addLoops(Math.floor(COLS*ROWS*.08));
+      player={r:0,c:0};
+      const sp=[[ROWS-1,0],[0,COLS-1],[ROWS-1,COLS-2],[1,COLS-1]];
+      enemies=Array.from({length:cfg.enemyCount},(_,i)=>({r:sp[i%sp.length][0],c:sp[i%sp.length][1],chasing:false}));
+      keyItem=cfg.hasKey?{r:Math.floor(ROWS/2),c:Math.floor(COLS/2),collected:false}:null;
+      moveCount=0; startTime=Date.now();
+      document.getElementById('moves').textContent=0;
+      document.getElementById('levelDisplay').textContent=lvl;
+      document.getElementById('levelName').textContent=cfg.name.toUpperCase();
+      updateKeyStatus(); buildDifficultyText();
+      timerInterval=setInterval(()=>{ if(gameActive) document.getElementById('timer').textContent=Math.floor((Date.now()-startTime)/1000)+'s'; },500);
+      if(cfg.enemyCount>0) enemyInterval=setInterval(stepAllEnemies,getEnemySpeed(lvl));
+      gameActive=true; draw();
+    }
+
+    function buildDifficultyText(){
+      const p=[`${getMazeSize(level)}×${getMazeSize(level)}`];
+      if(cfg.enemyCount>0) p.push(`<span style="color:#ff5555">${cfg.enemyCount} ${t('diffEnemy')}</span>`);
+      if(cfg.fog!==Infinity) p.push(`<span style="color:#ffbb33">${t('diffFog')}${cfg.fog}</span>`);
+      if(cfg.hasKey) p.push(`<span style="color:#ffcc00">${t('diffKey')}</span>`);
+      document.getElementById('difficulty').innerHTML=p.join(' | ');
+    }
+    function updateKeyStatus(){
+      const el=document.getElementById('keyStatus');
+      if(!cfg||!cfg.hasKey){el.style.display='none';return;}
+      el.style.display='block';
+      document.getElementById('keyText').textContent=keyItem&&keyItem.collected?t('keyGot'):t('keyFind');
+    }
+
+    function stepAllEnemies(){
+      if(!gameActive) return;
+      for(const e of enemies){
+        const dist=Math.sqrt((e.r-player.r)**2+(e.c-player.c)**2);
+        let dir;
+        if(dist<=getChaseRadius(level)){e.chasing=true;dir=bfsNextDir(e.r,e.c,player.r,player.c);}
+        else{e.chasing=false;const v=[0,1,2,3].filter(d=>!cellAt(e.r,e.c).walls[d]);dir=v[Math.floor(Math.random()*v.length)];}
+        if(dir!=null){e.r+=DR[dir];e.c+=DC[dir];}
+        if(e.r===player.r&&e.c===player.c){draw();triggerGameOver();return;}
+      }
+      draw();
+    }
+
+    function movePlayer(dr,dc){
+      if(!gameActive) return;
+      const d=DR.findIndex((r,i)=>r===dr&&DC[i]===dc);
+      if(cellAt(player.r,player.c).walls[d]) return;
+      player.r+=dr; player.c+=dc; moveCount++;
+      document.getElementById('moves').textContent=moveCount;
+      if(keyItem&&!keyItem.collected&&player.r===keyItem.r&&player.c===keyItem.c){keyItem.collected=true;updateKeyStatus();notify(t('keyNotify'));}
+      draw();
+      if(enemies.some(e=>e.r===player.r&&e.c===player.c)){triggerGameOver();return;}
+      if((!cfg.hasKey||keyItem.collected)&&player.r===ROWS-1&&player.c===COLS-1) triggerWin();
+    }
+
+    function triggerWin(){
+      gameActive=false; clearInterval(timerInterval); clearInterval(enemyInterval);
+      if (level === MAX_LEVEL) {
+        showOverlay('🏆 You Won!', 'You escaped all 7 nightmares. You are free.', 'Play Again', ()=>{hideOverlay();initLevel(1);notify(getConfig(1).note);});
+      } else {
+        const nextLvl=level+1;
+        const taunts=t('taunts'), taunt=taunts[Math.min(level-1,taunts.length-1)];
+        showOverlay(t('winTitle'),taunt,t('nextBtn'),()=>{hideOverlay();initLevel(nextLvl);notify(getConfig(nextLvl).note);});
+      }
+    }
+    function triggerGameOver(){
+      gameActive=false; clearInterval(timerInterval); clearInterval(enemyInterval);
+      showOverlay(t('caughtTitle'),t('caughtMsg')(cfg.name),t('retryBtn'),()=>{hideOverlay();initLevel(level);});
+    }
+    function showOverlay(title,msg,btnText,cb){
+      document.getElementById('overlayTitle').textContent=title;
+      document.getElementById('overlayMsg').textContent=msg;
+      const btn=document.getElementById('overlayBtn');btn.textContent=btnText;btn.onclick=cb;
+      document.getElementById('overlay').style.display='flex';
+    }
+    function hideOverlay(){ document.getElementById('overlay').style.display='none'; }
+    function notify(msg){ const el=document.getElementById('notification');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',2800); }
+
+    function draw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle=cfg.bg;ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle=cfg.wall;ctx.lineWidth=2;
+      for(const cell of grid){const x=cell.c*CELL,y=cell.r*CELL;if(cell.walls[0])line(x,y,x+CELL,y);if(cell.walls[1])line(x+CELL,y,x+CELL,y+CELL);if(cell.walls[2])line(x,y+CELL,x+CELL,y+CELL);if(cell.walls[3])line(x,y,x,y+CELL);}
+      if(keyItem&&!keyItem.collected){const kx=keyItem.c*CELL+CELL/2,ky=keyItem.r*CELL+CELL/2;ctx.font=`${CELL-6}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='#ffcc00';ctx.shadowBlur=12;ctx.fillText('🔑',kx,ky);ctx.shadowBlur=0;}
+      const exitOpen=!cfg.hasKey||(keyItem&&keyItem.collected);
+      ctx.font=`${CELL-4}px serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle=exitOpen?cfg.accent:'#555';ctx.shadowColor=exitOpen?cfg.accent:'transparent';ctx.shadowBlur=exitOpen?14:0;
+      ctx.fillText('★',(COLS-1)*CELL+CELL/2,(ROWS-1)*CELL+CELL/2);ctx.shadowBlur=0;
+      for(const e of enemies){const ex=e.c*CELL+CELL/2,ey=e.r*CELL+CELL/2;ctx.beginPath();ctx.arc(ex,ey,CELL/2-3,0,Math.PI*2);ctx.fillStyle=e.chasing?'#ff1111':'#882222';ctx.shadowColor=e.chasing?'#ff0000':'#440000';ctx.shadowBlur=e.chasing?20:5;ctx.fill();ctx.shadowBlur=0;if(CELL>=16){const er=CELL/10;for(const ox of[-CELL/7,CELL/7]){ctx.beginPath();ctx.arc(ex+ox,ey-CELL/9,er+1,0,Math.PI*2);ctx.fillStyle='white';ctx.fill();ctx.beginPath();ctx.arc(ex+ox,ey-CELL/9,er*.55,0,Math.PI*2);ctx.fillStyle='#111';ctx.fill();}}}
+      if(cfg.fog!==Infinity){for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){const dist=Math.sqrt((r-player.r)**2+(c-player.c)**2);let a=0;if(dist>cfg.fog)a=.94;else if(dist>cfg.fog-1.5)a=((dist-(cfg.fog-1.5))/1.5)*.94;if(a>0){ctx.fillStyle=`rgba(5,5,10,${a.toFixed(2)})`;ctx.fillRect(c*CELL,r*CELL,CELL,CELL);}}}
+      const px=player.c*CELL+CELL/2,py=player.r*CELL+CELL/2;
+      ctx.beginPath();ctx.arc(px,py,CELL/2-4,0,Math.PI*2);ctx.fillStyle='#00d4ff';ctx.shadowColor='#00d4ff';ctx.shadowBlur=14;ctx.fill();ctx.shadowBlur=0;
+    }
+    function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+
+    document.addEventListener('keydown',e=>{const map={ArrowUp:[-1,0],w:[-1,0],W:[-1,0],ArrowDown:[1,0],s:[1,0],S:[1,0],ArrowLeft:[0,-1],a:[0,-1],A:[0,-1],ArrowRight:[0,1],d:[0,1],D:[0,1]};if(map[e.key]){movePlayer(...map[e.key]);e.preventDefault();}});
+    let tx,ty;
+    canvas.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;e.preventDefault();},{passive:false});
+    canvas.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;if(Math.abs(dx)>Math.abs(dy))movePlayer(0,dx>0?1:-1);else movePlayer(dy>0?1:-1,0);e.preventDefault();},{passive:false});
+
+    // ── Start screen ───────────────────────────────────────────────────────────
+    const dripsEl=document.getElementById('bloodDrips');
+    for(let i=0;i<20;i++){const d=document.createElement('div');d.className='drip';d.style.animationDuration=`${1.5+Math.random()*3}s`;d.style.animationDelay=`${Math.random()*4}s`;d.style.width=`${4+Math.random()*6}px`;d.style.marginLeft=`${Math.random()*10}px`;dripsEl.appendChild(d);}
+
+    document.getElementById('startBtn').addEventListener('click',()=>{
+      document.getElementById('startScreen').style.display='none';
+      initLevel(1); notify(getConfig(1).note);
+    });
+  </script>
+</body>
+</html>
