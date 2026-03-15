@@ -21,6 +21,26 @@
     #overlay button:hover { background: #c73652; }
     #notification { position: fixed; top: 18px; background: #e94560; color: #fff; padding: 9px 22px; border-radius: 20px; font-size: .95rem; font-weight: bold; opacity: 0; transition: opacity .4s; pointer-events: none; z-index: 20; }
 
+    /* ── Ending screen ── */
+    #endingScreen {
+      position: fixed; inset: 0; z-index: 300;
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    #endCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #endingPlayAgain {
+      position: relative; z-index: 2;
+      margin-top: 60vh;
+      padding: 14px 44px; font-size: 1.1rem; font-weight: bold;
+      letter-spacing: 2px; text-transform: uppercase;
+      background: #ffd700; color: #111; border: none;
+      border-radius: 30px; cursor: pointer;
+      box-shadow: 0 4px 20px #ffd70088;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.8s, transform 0.2s;
+    }
+    #endingPlayAgain:hover { transform: translateY(-2px); box-shadow: 0 6px 28px #ffd700aa; }
+
     /* ── Language picker ── */
     #langToggle {
       position: fixed; top: 12px; right: 12px; z-index: 200;
@@ -87,6 +107,11 @@
   <div id="controls">Arrow keys or WASD to move</div>
   <div id="overlay"><h2 id="overlayTitle"></h2><p id="overlayMsg"></p><button id="overlayBtn"></button></div>
   <div id="notification"></div>
+
+  <div id="endingScreen">
+    <canvas id="endCanvas"></canvas>
+    <button id="endingPlayAgain">Play Again</button>
+  </div>
 
   <div id="startScreen">
     <div id="bloodDrips"></div>
@@ -500,10 +525,167 @@
       if((!cfg.hasKey||keyItem.collected)&&player.r===ROWS-1&&player.c===COLS-1) triggerWin();
     }
 
+    // ── Ending animation ───────────────────────────────────────────────────────
+    function showEnding() {
+      const screen = document.getElementById('endingScreen');
+      screen.style.display = 'flex';
+      const ec = document.getElementById('endCanvas');
+      const ex = ec.getContext('2d');
+      ec.width  = window.innerWidth;
+      ec.height = window.innerHeight;
+
+      const W = ec.width, H = ec.height;
+      const CY = H * 0.55;
+      const R  = Math.min(W, H) * 0.07;   // player/enemy radius
+      const KR = R * 1.5;                  // king radius
+      const playerX = W * 0.35;
+      const kingStartX = W + KR + 20;
+      const kingEndX   = W * 0.62;
+
+      const particles = [];
+      function spawnParticles() {
+        for (let i = 0; i < 80; i++) {
+          particles.push({
+            x: playerX, y: CY - R,
+            vx: (Math.random() - 0.5) * 8,
+            vy: -(Math.random() * 6 + 2),
+            size: Math.random() * 8 + 4,
+            color: ['#ffd700','#fff','#e94560','#00d4ff','#ff9500'][Math.floor(Math.random()*5)],
+            life: 1
+          });
+        }
+      }
+
+      let startT = null;
+      const T1 = 2200;  // king finishes walking
+      const T2 = 3200;  // king bows / pause
+      const T3 = 4400;  // crown lands on player
+      const T4 = 5200;  // text fully visible
+      const T5 = 5800;  // particles burst
+      let particlesSpawned = false;
+
+      function drawEye(ctx, x, y, r) {
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fillStyle='white'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, r*0.55, 0, Math.PI*2); ctx.fillStyle='#111'; ctx.fill();
+      }
+
+      function easeOut(t) { return 1 - Math.pow(1-t, 3); }
+      function lerp(a, b, t) { return a + (b-a)*t; }
+
+      function frame(ts) {
+        if (!startT) startT = ts;
+        const e = ts - startT;
+
+        // Background gradient — throne room
+        const bg = ex.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#0a0010'); bg.addColorStop(1, '#1a0d00');
+        ex.fillStyle = bg; ex.fillRect(0, 0, W, H);
+
+        // Floor
+        ex.fillStyle = '#1a1208';
+        ex.fillRect(0, CY + R + 12, W, H);
+        ex.strokeStyle = '#ffd70033'; ex.lineWidth = 2;
+        ex.beginPath(); ex.moveTo(0, CY+R+12); ex.lineTo(W, CY+R+12); ex.stroke();
+
+        // Spotlight on player
+        const sp = ex.createRadialGradient(playerX, CY, 0, playerX, CY, R*5);
+        sp.addColorStop(0, 'rgba(255,215,0,0.12)'); sp.addColorStop(1, 'rgba(0,0,0,0)');
+        ex.fillStyle = sp; ex.fillRect(0, 0, W, H);
+
+        // ── King position ──
+        let kingX;
+        if (e < T1) kingX = lerp(kingStartX, kingEndX, easeOut(e/T1));
+        else        kingX = kingEndX;
+
+        // King bow offset (dips down slightly during bow phase)
+        let bowY = 0;
+        if (e > T1 && e < T2) bowY = Math.sin(((e-T1)/(T2-T1))*Math.PI) * R * 0.4;
+
+        // ── Crown position ──
+        let crownX, crownY;
+        if (e < T2) {
+          crownX = kingX; crownY = CY - KR - R*0.6 + bowY;
+        } else if (e < T3) {
+          const t = easeOut((e-T2)/(T3-T2));
+          crownX = lerp(kingX, playerX, t);
+          crownY = lerp(CY - KR - R*0.6, CY - R - R*0.55, t) - Math.sin(t*Math.PI)*R*2.5;
+        } else {
+          crownX = playerX; crownY = CY - R - R*0.55;
+        }
+
+        // ── Draw player ──
+        ex.beginPath(); ex.arc(playerX, CY, R, 0, Math.PI*2);
+        ex.fillStyle = '#00d4ff'; ex.shadowColor='#00d4ff'; ex.shadowBlur=20; ex.fill(); ex.shadowBlur=0;
+        drawEye(ex, playerX-R*0.28, CY-R*0.2, R*0.18);
+        drawEye(ex, playerX+R*0.28, CY-R*0.2, R*0.18);
+
+        // ── Draw king ──
+        ex.beginPath(); ex.arc(kingX, CY + bowY, KR, 0, Math.PI*2);
+        ex.fillStyle='#cc2200'; ex.shadowColor='#ff4400'; ex.shadowBlur=24; ex.fill(); ex.shadowBlur=0;
+        // King cape/robe hint
+        ex.beginPath(); ex.ellipse(kingX, CY+bowY+KR*0.6, KR*0.8, KR*0.4, 0, 0, Math.PI);
+        ex.fillStyle='#880000'; ex.fill();
+        // King eyes
+        drawEye(ex, kingX-KR*0.25, CY+bowY-KR*0.15, KR*0.15);
+        drawEye(ex, kingX+KR*0.25, CY+bowY-KR*0.15, KR*0.15);
+
+        // ── Speech bubble from king ──
+        if (e > T3) {
+          const bubbleAlpha = Math.min(1, (e-T3)/500);
+          ex.globalAlpha = bubbleAlpha;
+          const bx = kingX - KR*0.5, by = CY - KR*2.6;
+          const bw = R*6.5, bh = R*1.6;
+          ex.fillStyle='#fff'; ex.beginPath();
+          ex.roundRect(bx - bw/2, by - bh/2, bw, bh, 12); ex.fill();
+          // tail
+          ex.beginPath(); ex.moveTo(bx-10, by+bh/2); ex.lineTo(kingX-KR*0.2, CY-KR); ex.lineTo(bx+10, by+bh/2); ex.fill();
+          ex.fillStyle='#111'; ex.font=`bold ${R*0.58}px Segoe UI`;
+          ex.textAlign='center'; ex.textBaseline='middle';
+          ex.fillText('You are the king now', bx, by);
+          ex.globalAlpha = 1;
+        }
+
+        // ── Crown emoji ──
+        ex.font = `${R*1.1}px serif`;
+        ex.textAlign='center'; ex.textBaseline='middle';
+        ex.shadowColor='#ffd700'; ex.shadowBlur=16;
+        ex.fillText('👑', crownX, crownY);
+        ex.shadowBlur=0;
+
+        // ── Particles ──
+        if (e > T5 && !particlesSpawned) { spawnParticles(); particlesSpawned=true; }
+        for (const p of particles) {
+          p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.life -= 0.012;
+          ex.globalAlpha = Math.max(0, p.life);
+          ex.fillStyle = p.color;
+          ex.beginPath(); ex.arc(p.x, p.y, p.size, 0, Math.PI*2); ex.fill();
+        }
+        ex.globalAlpha = 1;
+
+        // ── "Play Again" button ──
+        if (e > T4 + 800) {
+          const btn = document.getElementById('endingPlayAgain');
+          btn.style.opacity = '1'; btn.style.pointerEvents = 'auto';
+        }
+
+        requestAnimationFrame(frame);
+      }
+
+      requestAnimationFrame(frame);
+
+      document.getElementById('endingPlayAgain').onclick = () => {
+        document.getElementById('endingScreen').style.display = 'none';
+        document.getElementById('endingPlayAgain').style.opacity = '0';
+        document.getElementById('endingPlayAgain').style.pointerEvents = 'none';
+        particles.length = 0;
+        initLevel(1); notify(getConfig(1).note);
+      };
+    }
+
     function triggerWin(){
       gameActive=false; clearInterval(timerInterval); clearInterval(enemyInterval);
       if (level === MAX_LEVEL) {
-        showOverlay('🏆 You Won!', 'You escaped all 7 nightmares. You are free.', 'Play Again', ()=>{hideOverlay();initLevel(1);notify(getConfig(1).note);});
+        showEnding();
       } else {
         const nextLvl=level+1;
         const taunts=t('taunts'), taunt=taunts[Math.min(level-1,taunts.length-1)];
